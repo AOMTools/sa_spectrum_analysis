@@ -1,0 +1,10 @@
+import os
+def mkdir(tar_path):
+    try:
+        if os.path.isdir(tar_path)==False:
+            os.makedirs(tar_path)
+        else:
+            print('The folder already existed')
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise

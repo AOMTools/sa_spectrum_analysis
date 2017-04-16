@@ -1,0 +1,185 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from os import listdir
+from os.path import isfile, join
+import processor as ps
+from math import *
+import os
+def plot(tar_path,emptycav_plot=False):
+    sa_T_path=tar_path+'/merge_norm_sa/T'
+    nsa_T_path=tar_path+'/merge_norm_nsa/T'
+    sa_R_path=tar_path+'/merge_norm_sa/R'
+    nsa_R_path=tar_path+'/merge_norm_nsa/R'
+    verdict_path=tar_path+'/verdict_report/'
+
+    Tfiles=[f for f in listdir(sa_T_path) if isfile(join(sa_T_path, f)) ]
+    Tfiles.sort()
+    print(Tfiles)
+    sizef=np.size(Tfiles)
+
+    sa_T=np.zeros((sizef,3))
+    sa_R=np.zeros((sizef,3))
+    nsa_T=np.zeros((sizef,3))
+    nsa_R=np.zeros((sizef,3))
+
+
+    freq=[]#list of freq
+    nof_sa_atom=[]#no of single atoms for each freq
+    avg_lf=[]#avg lifetime of single atoms for each freq
+    std_lf=[]
+
+    #get time step
+    t=np.genfromtxt(tar_path+'/merge_norm/T/384.dat')[0]
+    timestep=t[1]-t[0]
+
+    
+    #################################
+    for i,f in enumerate(Tfiles):
+        #each f is a file representing 1 freq point
+
+        freq.append(int(os.path.splitext(f)[0]))
+
+        T=[]
+        R=[]
+        Tnsa=[]
+        Rnsa=[]
+
+        verdict_report=verdict_path+f
+        T_path=sa_T_path+'/'+f
+        R_path=sa_R_path+'/'+f
+        Tnsa_path=nsa_T_path+'/'+f
+        Rnsa_path=nsa_R_path+'/'+f
+
+
+        #get lifetime first
+        m_lt=ps.mask_lifetime(verdict_report=verdict_report)
+        m_lifetime=[floor(x/timestep) for x in m_lt] #unit of timestep
+
+        m_lt_nsa=ps.mask_lifetime(case='MA/UC',verdict_report=verdict_report)
+        m_lifetime_nsa=[floor(x/timestep) for x in m_lt_nsa] #unit of timestep
+        #lifetime as unit of timestemp
+
+
+        Ta=np.genfromtxt(T_path)[1:,:]#Transmission of single atoms
+        Ra=np.genfromtxt(R_path)[1:,:]
+        Tnsa_a=np.genfromtxt(Tnsa_path)[1:,:]
+        Rnsa_a=np.genfromtxt(Rnsa_path)[1:,:]
+        nof_sa_atom.append(np.shape(Ta)[0])
+        cnt=0
+        lf_a=[]
+
+        #Get empty cav T & R
+        for j,a in enumerate(Ta):
+            lf=int(m_lifetime[j])
+            lf_a.append(m_lt[j])
+            for m in range(lf-1): #-1 for the safety. dont trust the last point
+                T.append(a[m])
+                cnt=cnt+1
+        avg_lf.append(np.mean(lf_a))
+        std_lf.append(np.std(lf_a))
+
+        for j,a in enumerate(Ra):
+            lf=int(m_lifetime[j])
+            for m in range(lf-1): #-1 for the safety. dont trust the last point
+                R.append(a[m])
+
+
+        cnt_nsa=0
+        for j,a in enumerate(Tnsa_a):
+            lf=int(m_lifetime_nsa[j])
+            for m in range(lf-1): #-1 for the safety. dont trust the last point
+                Tnsa.append(a[m])
+                cnt_nsa=cnt_nsa+1
+
+
+        sa_T[i,0]=np.mean(T)
+        sa_T[i,1]=np.std(T)
+        sa_T[i,2]=cnt
+
+        sa_R[i,0]=np.mean(R)
+        sa_R[i,1]=np.std(R)
+        sa_R[i,2]=cnt
+
+        nsa_T[i,0]=np.mean(Tnsa)
+        nsa_T[i,1]=np.std(Tnsa)
+        nsa_T[i,2]=cnt_nsa
+
+
+    #import data from nsp_avg
+    #this is to plot the empty cav
+    if emptycav_plot==True:
+        avg_data=np.genfromtxt('avg_spec_data',skip_header=1)
+        aaT=avg_data[:,1]
+        std_aaT=avg_data[:,2]
+        Tempty=avg_data[:,5]
+        std_Tempty=avg_data[:,6]
+
+    #import data from selected atom
+    '''
+    selected_data=np.genfromtxt('selected_spec_data',skip_header=1)
+    slT=selected_data[:,1]
+    std_slT=selected_data[:,2]
+    '''
+
+#######################################
+#PLOTTING
+#######################################
+    fig=plt.figure(num=None, figsize=(10, 8), dpi=1000, facecolor='w', edgecolor='k')
+    plt.title('Single Atom-Cavity Spectrum',fontsize="30")
+    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.xlabel('Frequency(MHz)',fontsize="30")
+    plt.ylabel('Counts/ms',fontsize="30")
+    plt.xlim([-100,150])
+    plt.ylim([0,35])
+    #plt.errorbar(freq,Twoatom,yerr=std_Twoatom,fmt='-o')
+    freq=np.asarray(freq)
+    plt.errorbar(freq-360,sa_T[:,0],yerr=sa_T[:,1]/np.sqrt(sa_T[:,2 ]),fmt='-o',color='red',label='Single Atoms')
+    #plt.errorbar(freq-360,aaT,yerr=std_aaT,fmt='-o',color='blue',label='All Atoms')
+    #plt.errorbar(freq-360,slT,yerr=std_slT,fmt='-o',color='green',label='Selected Atoms')
+    if emptycav_plot==True:
+        plt.errorbar(freq-360,Tempty,yerr=std_Tempty,fmt='-o',color='brown',label='EmptyCav')
+    #   plt.errorbar(freq-360,nsa_T[:,0],yerr=nsa_T[:,1]/np.sqrt(nsa_T[:,2 ]),fmt='-o',color='black')
+    #plt.errorbar(freq-360,nsa_T[:,0],yerr=nsa_T[:,1]/np.sqrt(nsa_T[:,2 ]),fmt='-o',color='black',label='MA/UC')
+    #plt.errorbar(freq-360,avg_Temptyspec,yerr=std_Temptyspec/trignumempty/numset,fmt='-o',color='blue')
+    legend = plt.legend(loc='upper right')
+
+    fig.savefig('SA_cav_scan.pdf')
+
+
+    fig=plt.figure(num=None, figsize=(10, 8), dpi=1000, facecolor='w', edgecolor='k')
+    plt.title('Single Atom-Cavity Spectrum',fontsize="30")
+    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.xlabel('Frequency(MHz)',fontsize="30")
+    plt.ylabel('Counts/ms',fontsize="30")
+    plt.xlim([-100,150])
+    plt.ylim([20,35])
+    #plt.errorbar(freq,Twoatom,yerr=std_Twoatom,fmt='-o')
+    freq=np.asarray(freq)
+    plt.errorbar(freq-360,sa_R[:,0],yerr=sa_R[:,1]/np.sqrt(sa_R[:,2 ]),fmt='-o',color='red')
+    #plt.errorbar(freq-360,nsa_T[:,0],yerr=nsa_T[:,1]/np.sqrt(nsa_T[:,2 ]),fmt='-o',color='black')
+    #plt.errorbar(freq-360,avg_Temptyspec,yerr=std_Temptyspec/trignumempty/numset,fmt='-o',color='blue')
+    fig.savefig('SA_cav_ref_scan.pdf')
+    #REPORT file
+
+
+    '''
+    fig=plt.figure(num=None, figsize=(10, 8), dpi=1000, facecolor='w', edgecolor='k')
+    plt.title('Single Atom-Cavity Spectrum',fontsize="30")
+    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.xlabel('Frequency(MHz)',fontsize="30")
+    plt.ylabel('Counts/ms',fontsize="30")
+    plt.xlim([-100,150])
+    #plt.ylim([0,1000])
+    #plt.errorbar(freq,Twoatom,yerr=std_Twoatom,fmt='-o')
+    freq=np.asarray(freq)
+    plt.errorbar(freq-360,avg_lf,yerr=std_lf/np.sqrt(nof_sa_atom),fmt='-o',color='red')
+
+    #plt.errorbar(freq-360,avg_Temptyspec,yerr=std_Temptyspec/trignumempty/numset,fmt='-o',color='blue')
+    fig.savefig('SA_lf_scan.pdf')
+    '''
+    with open('report_spectrum','w') as f:
+        f.write('{:^10} {:^10} {:^10} {:^10} {:^10} {:^10} \n'.format('freq','avg_T','std_T','avg_R','std_R','Nofatom'))
+        for i in range(len(freq)):
+            f.write('{:^10} {:^10.3f} {:^10.3f} {:^10.3f} {:^10.3f} {:^10d} \n'.format(int(freq[i]),sa_T[i,0],sa_T[i,1],sa_R[i,0],sa_R[i,1],int(nof_sa_atom[i])))
+
+
